@@ -17,8 +17,11 @@ Built to reflect month-end close consolidation at a multi-entity SaaS organizati
 
 | Feature | Detail |
 |---|---|
-| FX Translation | P&L at period-average; B/S at period-closing (IAS 21 / ASC 830) |
-| IC Elimination | Removes intercompany revenue, receivables, payables (IFRS 10) |
+| FX Translation | Current rate method: assets and liabilities at closing, P&L at average, equity at historical (IAS 21 / ASC 830) |
+| CTA | Each entity's translation difference booked to Cumulative Translation Adjustment in equity (OCI) |
+| IC Elimination | Balanced USD journal entries remove intercompany revenue, charges, receivables and payables (IFRS 10) |
+| Built-in checks | Confirms Assets = Liabilities + Equity and reports any intercompany residual |
+| Input validation | Rejects unbalanced trial balances, unbalanced eliminations and conflicting account types |
 | Multi-currency | USD parent · CAD subsidiary · GBP subsidiary → consolidated USD |
 | Editable FX rates | Web app allows live rate adjustment before consolidating |
 | CSV export | Machine-readable consolidated trial balance |
@@ -73,11 +76,19 @@ pip install pytest && pytest tests/ -v
 
 Account types: `ASSET` `LIABILITY` `EQUITY` `REVENUE` `COGS` `OPEX` `OTHER_INCOME` `OTHER_EXPENSE`
 
+All entities must use a common group chart of accounts (the same code means the same account in every trial balance). Each trial balance must balance in its local currency.
+
+## Sample Data
+
+The fixtures model a USD parent with CAD and GBP subsidiaries. Entity A charges Entity B USD 54,200; Entity B carries the payable remeasured at the closing rate, so it eliminates exactly against Entity A's receivable. The consolidated result balances at $1,513,829 with a translation loss of $9,041 in CTA, since CAD and GBP weakened against their historical rates.
+
+Simplification: equity is translated at a single historical rate per currency. In practice, opening retained earnings carries forward from the prior period's translated balance.
+
 ---
 
 ## Standards Applied
 
-- **IAS 21** — FX translation: P&L at average rate, B/S at closing rate
+- **IAS 21** — FX translation: assets and liabilities at closing rate, P&L at average rate, equity at historical rates, differences to OCI
 - **IFRS 10** — Consolidated financial statements: full IC elimination
 - **ASC 830** — US GAAP equivalent FX translation methodology
 

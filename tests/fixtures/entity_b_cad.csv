@@ -1,26 +1,26 @@
 account_code,account_name,account_type,debit,credit,currency
-1000,Cash - Operating,ASSET,118400.00,0.00,CAD
+1000,Cash - Operating,ASSET,71600.00,0.00,CAD
 1100,Accounts Receivable,ASSET,72800.00,0.00,CAD
-1200,Prepaid Expenses,ASSET,9600.00,0.00,CAD
-1300,Fixed Assets,ASSET,88000.00,0.00,CAD
-1310,Accum Depr,ASSET,0.00,24000.00,CAD
-1400,Intercompany Payable - Entity A,LIABILITY,0.00,73514.00,CAD
+1210,Prepaid Expenses,ASSET,9600.00,0.00,CAD
+1300,Property Plant & Equipment,ASSET,88000.00,0.00,CAD
+1310,Accumulated Depreciation,ASSET,0.00,24000.00,CAD
 2000,Accounts Payable,LIABILITY,0.00,28400.00,CAD
 2010,Accrued Liabilities,LIABILITY,0.00,12200.00,CAD
-2020,HST Payable,LIABILITY,0.00,8600.00,CAD
+2030,Sales Tax Payable (HST/VAT),LIABILITY,0.00,8600.00,CAD
+2050,Intercompany Payable - Entity A,LIABILITY,0.00,73741.50,CAD
 3000,Common Stock,EQUITY,0.00,80000.00,CAD
 3100,Retained Earnings,EQUITY,0.00,48400.00,CAD
-4000,Sales Revenue,REVENUE,0.00,214000.00,CAD
-4010,Service Revenue,REVENUE,0.00,68000.00,CAD
-4100,Intercompany Revenue - Entity A,REVENUE,0.00,73514.00,CAD
-4900,Returns & Allowances,REVENUE,9200.00,0.00,CAD
-5000,Cost of Goods Sold,COGS,86400.00,0.00,CAD
-5010,Direct Labour,COGS,34200.00,0.00,CAD
-6000,Salaries Expense,OPEX,58400.00,0.00,CAD
-6010,Benefits,OPEX,10800.00,0.00,CAD
-6020,Rent Expense,OPEX,14400.00,0.00,CAD
+4040,Product Revenue,REVENUE,0.00,214000.00,CAD
+4050,Service Revenue,REVENUE,0.00,68000.00,CAD
+4100,Returns & Allowances,REVENUE,9200.00,0.00,CAD
+5030,Cost of Goods Sold,COGS,86400.00,0.00,CAD
+5040,Direct Labour,COGS,34200.00,0.00,CAD
+6000,Salaries & Wages,OPEX,58400.00,0.00,CAD
+6010,Benefits & Payroll Taxes,OPEX,10800.00,0.00,CAD
+6020,Rent & Occupancy,OPEX,14400.00,0.00,CAD
 6030,Software & Subscriptions,OPEX,8200.00,0.00,CAD
-6040,Marketing,OPEX,12600.00,0.00,CAD
+6040,Marketing & Advertising,OPEX,12600.00,0.00,CAD
 6060,Depreciation Expense,OPEX,6800.00,0.00,CAD
+6080,Intercompany Charges - Entity A,OPEX,73243.24,0.00,CAD
 7000,Interest Income,OTHER_INCOME,0.00,1800.00,CAD
-8000,Foreign Exchange Loss,OTHER_EXPENSE,2400.00,0.00,CAD
+8010,Foreign Exchange Loss,OTHER_EXPENSE,2898.26,0.00,CAD

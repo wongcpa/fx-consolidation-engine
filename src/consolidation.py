@@ -24,6 +24,18 @@ Expected CSV columns (eliminations):
 Account types: REVENUE, COGS, OPEX, ASSET, LIABILITY, EQUITY,
                OTHER_INCOME, OTHER_EXPENSE
 
+All entities must use a common group chart of accounts: an account code
+means the same account in every trial balance.
+
+Method (IAS 21 / ASC 830 current rate method):
+  - Assets and liabilities at the closing rate
+  - Income and expenses at the average rate
+  - Equity at historical rates
+  - Each entity's translation difference is booked to a Cumulative
+    Translation Adjustment (CTA) account in equity (OCI)
+  - Eliminations are posted as balanced journal entries in USD; any
+    intercompany balance left afterwards is reported
+
 Test fixtures:
   entity_a_usd.csv, entity_b_cad.csv, entity_c_gbp.csv,
   intercompany_eliminations.csv
@@ -42,10 +54,14 @@ from typing import Dict, List, Tuple
 # ---------------------------------------------------------------------------
 # SECTION 1: FX TRANSLATION RATES
 # ---------------------------------------------------------------------------
+# USD per unit of foreign currency.
+#   average    — income and expenses (IAS 21.39(b))
+#   closing    — assets and liabilities (IAS 21.39(a))
+#   historical — equity, at the rates when the balances arose
 FX_RATES = {
-    ("CAD", "USD"): (0.7400, 0.7350),
-    ("GBP", "USD"): (1.2700, 1.2650),
-    ("USD", "USD"): (1.0000, 1.0000),
+    ("CAD", "USD"): {"average": 0.7400, "closing": 0.7350, "historical": 0.7800},
+    ("GBP", "USD"): {"average": 1.2700, "closing": 1.2650, "historical": 1.3000},
+    ("USD", "USD"): {"average": 1.0000, "closing": 1.0000, "historical": 1.0000},
 }
 
 def translate(amount: float, from_ccy: str, to_ccy: str,
@@ -56,9 +72,10 @@ def translate(amount: float, from_ccy: str, to_ccy: str,
     key = (from_ccy, to_ccy)
     if key not in FX_RATES:
         raise ValueError(f"No FX rate defined for {from_ccy} -> {to_ccy}")
-    avg_rate, close_rate = FX_RATES[key]
-    rate = avg_rate if rate_type == "average" else close_rate
-    return round(amount * rate, 2)
+    rates = FX_RATES[key]
+    if rate_type not in rates:
+        raise ValueError(f"Unknown rate type '{rate_type}'")
+    return round(amount * rates[rate_type], 2)
 
 
 # ---------------------------------------------------------------------------
@@ -179,13 +196,38 @@ def load_eliminations(filepath: str) -> List[Dict]:
 # SECTION 4: TRANSLATION & CONSOLIDATION ENGINE
 # ---------------------------------------------------------------------------
 
+PL_TYPES = {"REVENUE", "COGS", "OPEX", "OTHER_INCOME", "OTHER_EXPENSE"}
+CTA_CODE = "3900"
+CTA_NAME = "Cumulative Translation Adjustment (OCI)"
+
+
+def rate_type_for(account_type: str) -> str:
+    """Rate used to translate an account type (IAS 21 current rate method)."""
+    if account_type in PL_TYPES:
+        return "average"
+    if account_type == "EQUITY":
+        return "historical"
+    return "closing"
+
+
 def translate_trial_balance(tb: List[Dict],
                             entity_name: str) -> List[Dict]:
-    """Translate all amounts to USD using appropriate rate type."""
-    pl_types = {"REVENUE", "COGS", "OPEX", "OTHER_INCOME", "OTHER_EXPENSE"}
+    """
+    Translate a trial balance to USD and book the translation difference.
+
+    Mixed rates leave the translated trial balance out of balance; that
+    difference is the entity's CTA for the period and is posted to equity.
+    """
+    local_debit = sum(r["debit"] for r in tb)
+    local_credit = sum(r["credit"] for r in tb)
+    if abs(local_debit - local_credit) > 0.005:
+        raise ValueError(
+            f"{entity_name} trial balance does not balance: debits "
+            f"{local_debit:,.2f} vs credits {local_credit:,.2f}.")
+
     translated = []
     for row in tb:
-        rate_type = "average" if row["type"] in pl_types else "closing"
+        rate_type = rate_type_for(row["type"])
         translated.append({
             **row,
             "entity":      entity_name,
@@ -193,20 +235,32 @@ def translate_trial_balance(tb: List[Dict],
             "usd_credit":  translate(row["credit"], row["ccy"], "USD", rate_type),
             "rate_type":   rate_type,
         })
+
+    diff = round(sum(r["usd_debit"] for r in translated)
+                 - sum(r["usd_credit"] for r in translated), 2)
+    if diff:
+        translated.append({
+            "code": CTA_CODE, "name": CTA_NAME, "type": "EQUITY",
+            "debit": 0.0, "credit": 0.0, "ccy": "USD",
+            "entity":     entity_name,
+            "usd_debit":  max(-diff, 0.0),
+            "usd_credit": max(diff, 0.0),
+            "rate_type":  "derived",
+        })
     return translated
 
 
 def consolidate(entities: List[Tuple[str, List[Dict]]],
                 eliminations: List[Dict]) -> Dict[str, Dict]:
     """
-    Aggregate translated trial balances and apply IC eliminations.
+    Aggregate translated trial balances and post IC eliminations.
 
     Args:
         entities:     List of (entity_name, trial_balance) tuples.
-        eliminations: Loaded eliminations list.
+        eliminations: Loaded eliminations list (balanced journal entries, USD).
 
     Returns:
-        Dict keyed by account_code with consolidated totals.
+        Dict keyed by group account code with consolidated totals.
     """
     ledger: Dict[str, Dict] = {}
 
@@ -221,21 +275,29 @@ def consolidate(entities: List[Tuple[str, List[Dict]]],
                     "total_debit":  0.0,
                     "total_credit": 0.0,
                 }
+            elif ledger[code]["type"] != row["type"]:
+                raise ValueError(
+                    f"Account {code} is {ledger[code]['type']} in one entity and "
+                    f"{row['type']} in {entity_name}. Map all entities to a "
+                    f"common group chart of accounts first.")
             ledger[code]["total_debit"]  += row["usd_debit"]
             ledger[code]["total_credit"] += row["usd_credit"]
+
+    elim_debit = sum(e["elim_debit"] for e in eliminations)
+    elim_credit = sum(e["elim_credit"] for e in eliminations)
+    if abs(elim_debit - elim_credit) > 0.005:
+        raise ValueError(
+            f"Eliminations do not balance: debits {elim_debit:,.2f} vs "
+            f"credits {elim_credit:,.2f}.")
 
     for elim in eliminations:
         code = elim["account_code"]
         if code not in ledger:
-            ledger[code] = {
-                "code":         code,
-                "name":         elim["account_name"],
-                "type":         elim["account_type"],
-                "total_debit":  0.0,
-                "total_credit": 0.0,
-            }
-        ledger[code]["total_debit"]  -= elim["elim_debit"]
-        ledger[code]["total_credit"] -= elim["elim_credit"]
+            raise ValueError(
+                f"Elimination '{elim['description']}' references account "
+                f"{code}, which is not in any trial balance.")
+        ledger[code]["total_debit"]  += elim["elim_debit"]
+        ledger[code]["total_credit"] += elim["elim_credit"]
 
     return ledger
 
@@ -251,72 +313,96 @@ def net(row: Dict) -> float:
     return row["total_debit"] - row["total_credit"]
 
 
-def print_report(ledger: Dict[str, Dict], report_date: date) -> None:
+def summarize(ledger: Dict[str, Dict]) -> Dict[str, float]:
+    """Statement totals, net income, CTA and the balance sheet check."""
+    totals: Dict[str, float] = {}
+    for row in ledger.values():
+        totals[row["type"]] = totals.get(row["type"], 0.0) + net(row)
+    g = lambda k: totals.get(k, 0.0)
+    gross_profit = g("REVENUE") - g("COGS")
+    operating_income = gross_profit - g("OPEX")
+    net_income = operating_income + g("OTHER_INCOME") - g("OTHER_EXPENSE")
+    return {
+        "revenue":            round(g("REVENUE"), 2),
+        "gross_profit":       round(gross_profit, 2),
+        "operating_income":   round(operating_income, 2),
+        "net_income":         round(net_income, 2),
+        "assets":             round(g("ASSET"), 2),
+        "liabilities":        round(g("LIABILITY"), 2),
+        "equity":             round(g("EQUITY"), 2),
+        "cta":                round(net(ledger[CTA_CODE]), 2) if CTA_CODE in ledger else 0.0,
+        "balance_difference": round(g("ASSET") - g("LIABILITY") - g("EQUITY") - net_income, 2),
+    }
+
+
+def intercompany_residual(ledger: Dict[str, Dict],
+                          eliminations: List[Dict]) -> Dict[str, float]:
+    """Balances left on eliminated accounts (should be zero)."""
+    codes = {e["account_code"] for e in eliminations}
+    return {c: round(net(ledger[c]), 2) for c in sorted(codes)
+            if c in ledger and abs(net(ledger[c])) > 0.005}
+
+
+def print_report(ledger: Dict[str, Dict], report_date: date,
+                 eliminations: List[Dict] = ()) -> None:
     """Print consolidated P&L and Balance Sheet to stdout."""
-    pl_types = {"REVENUE", "COGS", "OPEX", "OTHER_INCOME", "OTHER_EXPENSE"}
-    bs_types = {"ASSET", "LIABILITY", "EQUITY"}
-
-    pl_rows = {c: v for c, v in ledger.items() if v["type"] in pl_types}
-    bs_rows = {c: v for c, v in ledger.items() if v["type"] in bs_types}
-
+    s = summarize(ledger)
     div = "=" * 72
+    line = lambda label, amt, indent=4: print(f"{' ' * indent}{label:<42}  ${amt:>14,.2f}")
+
     print(f"\n{div}")
     print("  CONSOLIDATED FINANCIAL STATEMENTS — USD")
     print(f"  Period Ending: {report_date.strftime('%B %d, %Y')}")
     print(f"  Entities: Entity A (USD), Entity B (CAD), Entity C (GBP)")
     print(div)
 
-    total_revenue = total_cogs = total_opex = 0.0
+    def section(label, acct_type):
+        rows = sorted((v for v in ledger.values() if v["type"] == acct_type),
+                      key=lambda x: x["code"])
+        if not rows:
+            return
+        print(f"\n  {label}")
+        for row in rows:
+            line(f"{row['code']}  {row['name'][:34]}", net(row))
 
     print("\n  CONSOLIDATED INCOME STATEMENT")
     print("  " + "-" * 60)
-    for type_label, acct_type in [
-        ("Revenue",            "REVENUE"),
-        ("Cost of Goods Sold", "COGS"),
-        ("Operating Expenses", "OPEX"),
-        ("Other Income",       "OTHER_INCOME"),
-        ("Other Expense",      "OTHER_EXPENSE"),
-    ]:
-        rows = {c: v for c, v in pl_rows.items() if v["type"] == acct_type}
-        if not rows:
-            continue
-        print(f"\n  {type_label}")
-        for row in sorted(rows.values(), key=lambda x: x["code"]):
-            n = net(row)
-            print(f"    {row['code']}  {row['name']:<35}  ${n:>14,.2f}")
-            if acct_type == "REVENUE":      total_revenue += n
-            elif acct_type == "COGS":       total_cogs += n
-            elif acct_type == "OPEX":       total_opex += n
-
-    gross_profit    = total_revenue - total_cogs
-    operating_income = gross_profit - total_opex
-    print(f"\n  {'Gross Profit':<42}  ${gross_profit:>14,.2f}")
-    print(f"  {'Operating Income (EBIT)':<42}  ${operating_income:>14,.2f}")
+    section("Revenue", "REVENUE")
+    section("Cost of Goods Sold", "COGS")
+    line("Gross Profit", s["gross_profit"], 2)
+    section("Operating Expenses", "OPEX")
+    line("Operating Income (EBIT)", s["operating_income"], 2)
+    section("Other Income", "OTHER_INCOME")
+    section("Other Expense", "OTHER_EXPENSE")
+    line("Net Income", s["net_income"], 2)
 
     print(f"\n\n  CONSOLIDATED BALANCE SHEET")
     print("  " + "-" * 60)
-    for type_label, acct_type in [
-        ("Assets",      "ASSET"),
-        ("Liabilities", "LIABILITY"),
-        ("Equity",      "EQUITY"),
-    ]:
-        rows = {c: v for c, v in bs_rows.items() if v["type"] == acct_type}
-        if not rows:
-            continue
-        print(f"\n  {type_label}")
-        section_total = 0.0
-        for row in sorted(rows.values(), key=lambda x: x["code"]):
-            n = net(row)
-            print(f"    {row['code']}  {row['name']:<35}  ${n:>14,.2f}")
-            section_total += n
-        print(f"    {'Total ' + type_label:<39}  ${section_total:>14,.2f}")
+    section("Assets", "ASSET")
+    line("Total Assets", s["assets"])
+    section("Liabilities", "LIABILITY")
+    line("Total Liabilities", s["liabilities"])
+    section("Equity", "EQUITY")
+    line("Net Income — Current Period", s["net_income"])
+    line("Total Equity", s["equity"] + s["net_income"])
+    line("Total Liabilities & Equity", s["liabilities"] + s["equity"] + s["net_income"], 2)
 
     print(f"\n{div}")
-    print("  FX Rates — CAD/USD avg: "
-          f"{FX_RATES[('CAD','USD')][0]}  close: {FX_RATES[('CAD','USD')][1]}")
-    print(f"            GBP/USD avg: "
-          f"{FX_RATES[('GBP','USD')][0]}  close: {FX_RATES[('GBP','USD')][1]}")
-    print("  IC balances eliminated per eliminations file.")
+    if abs(s["balance_difference"]) < 0.01:
+        print("  ✔ Balance sheet balances: Assets = Liabilities + Equity")
+    else:
+        print(f"  ✘ Balance sheet out of balance by ${s['balance_difference']:,.2f}")
+    residual = intercompany_residual(ledger, eliminations)
+    if residual:
+        for code, amt in residual.items():
+            print(f"  ⚠ Intercompany residual on {code} ({ledger[code]['name']}): ${amt:,.2f}")
+    elif eliminations:
+        print("  ✔ Intercompany balances fully eliminated")
+    print(f"  CTA (OCI) for the period: ${s['cta']:,.2f}")
+    for (ccy, _), r in FX_RATES.items():
+        if ccy != "USD":
+            print(f"  {ccy}/USD  avg {r['average']:.4f}  close {r['closing']:.4f}  "
+                  f"historical {r['historical']:.4f}")
     print(div)
 
 
@@ -324,7 +410,7 @@ def export_csv(ledger: Dict[str, Dict], filepath: str) -> None:
     """Export the consolidated ledger to CSV."""
     fieldnames = ["code", "name", "type",
                   "total_debit_usd", "total_credit_usd", "net_usd"]
-    with open(filepath, "w", newline="") as f:
+    with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for row in sorted(ledger.values(), key=lambda x: x["code"]):
@@ -334,8 +420,7 @@ def export_csv(ledger: Dict[str, Dict], filepath: str) -> None:
                 "type":             row["type"],
                 "total_debit_usd":  round(row["total_debit"],  2),
                 "total_credit_usd": round(row["total_credit"], 2),
-                "net_usd":          round(
-                    row["total_credit"] - row["total_debit"], 2),
+                "net_usd":          round(net(row), 2),
             })
     print(f"\n  ✔ CSV export saved to: {filepath}")
 
@@ -379,7 +464,7 @@ def main():
     print("Translating currencies and applying eliminations...")
     ledger = consolidate(entities, eliminations)
 
-    print_report(ledger, report_date=date.today())
+    print_report(ledger, report_date=date.today(), eliminations=eliminations)
     export_csv(ledger, output_path)
 
 
