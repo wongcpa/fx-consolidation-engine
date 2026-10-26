@@ -1,0 +1,25 @@
+account_code,account_name,account_type,debit,credit,currency
+1000,Cash - Operating,ASSET,94200.00,0.00,GBP
+1100,Trade Receivables,ASSET,58600.00,0.00,GBP
+1200,Prepaid Expenses,ASSET,7400.00,0.00,GBP
+1300,Property Plant Equipment,ASSET,124000.00,0.00,GBP
+1310,Accumulated Depreciation,ASSET,0.00,38000.00,GBP
+2000,Trade Payables,LIABILITY,0.00,34200.00,GBP
+2010,Accrued Liabilities,LIABILITY,0.00,16800.00,GBP
+2020,VAT Payable,LIABILITY,0.00,12400.00,GBP
+2100,Long-Term Lease Liability,LIABILITY,0.00,48000.00,GBP
+3000,Share Capital,EQUITY,0.00,60000.00,GBP
+3100,Retained Earnings,EQUITY,0.00,36800.00,GBP
+4000,Product Revenue,REVENUE,0.00,168000.00,GBP
+4010,Service Revenue,REVENUE,0.00,54000.00,GBP
+4900,Revenue Deductions,REVENUE,8200.00,0.00,GBP
+5000,Cost of Sales,COGS,72000.00,0.00,GBP
+5010,Royalties Payable,COGS,18400.00,0.00,GBP
+6000,Personnel Costs,OPEX,52000.00,0.00,GBP
+6010,Occupancy Costs,OPEX,21600.00,0.00,GBP
+6020,IT & Software,OPEX,9800.00,0.00,GBP
+6030,Professional Services,OPEX,14200.00,0.00,GBP
+6040,VAT & Compliance,OPEX,6400.00,0.00,GBP
+6060,Depreciation,OPEX,8800.00,0.00,GBP
+7000,Interest Income,OTHER_INCOME,0.00,2200.00,GBP
+8000,Interest Expense,OTHER_EXPENSE,4400.00,0.00,GBP

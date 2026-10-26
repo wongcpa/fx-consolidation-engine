@@ -1,0 +1,5 @@
+description,account_code,account_name,account_type,entity,elim_debit_usd,elim_credit_usd
+Eliminate IC Revenue A to B,4100,Intercompany Revenue - Entity B,REVENUE,Entity A (USD),52000,0
+Eliminate IC Receivable Entity A,1200,Intercompany Receivable - Entity B,ASSET,Entity A (USD),0,52000
+Eliminate IC Revenue B to A translated,4100,Intercompany Revenue - Entity A,REVENUE,Entity B (CAD),51948,0
+Eliminate IC Payable Entity B translated,1600,Intercompany Payable - Entity A,LIABILITY,Entity B (CAD),51948,0

@@ -1,0 +1,36 @@
+account_code,account_name,account_type,debit,credit,currency
+1000,Cash - Operating,ASSET,312500.00,0.00,USD
+1001,Cash - Payroll,ASSET,48000.00,0.00,USD
+1100,Accounts Receivable,ASSET,128400.00,0.00,USD
+1200,Intercompany Receivable - Entity B,ASSET,54200.00,0.00,USD
+1210,Prepaid Expenses,ASSET,18600.00,0.00,USD
+1300,Fixed Assets - Equipment,ASSET,245000.00,0.00,USD
+1310,Accum Depr - Equipment,ASSET,0.00,82000.00,USD
+1400,Content Assets,ASSET,180000.00,0.00,USD
+1410,Accum Amort - Content,ASSET,0.00,42000.00,USD
+2000,Accounts Payable,LIABILITY,0.00,44800.00,USD
+2010,Accrued Liabilities,LIABILITY,0.00,22400.00,USD
+2020,Deferred Revenue,LIABILITY,0.00,38500.00,USD
+2100,Long-Term Debt,LIABILITY,0.00,150000.00,USD
+3000,Common Stock,EQUITY,0.00,200000.00,USD
+3100,Retained Earnings,EQUITY,0.00,118500.00,USD
+3200,Additional Paid-In Capital,EQUITY,0.00,95000.00,USD
+4000,Content Licensing Revenue,REVENUE,0.00,524000.00,USD
+4010,Streaming Subscription Revenue,REVENUE,0.00,186000.00,USD
+4020,Advertising Revenue,REVENUE,0.00,94000.00,USD
+4030,Intercompany Revenue - Entity B,REVENUE,0.00,54200.00,USD
+4100,Returns & Allowances,REVENUE,12400.00,0.00,USD
+4110,Discounts,REVENUE,8600.00,0.00,USD
+5000,Content Amortization,COGS,42000.00,0.00,USD
+5010,Royalty Expense,COGS,68400.00,0.00,USD
+5020,Distribution Costs,COGS,31200.00,0.00,USD
+6000,Salaries & Wages,OPEX,96400.00,0.00,USD
+6010,Benefits & Payroll Taxes,OPEX,18200.00,0.00,USD
+6020,Rent Expense,OPEX,22800.00,0.00,USD
+6030,Software & Subscriptions,OPEX,16400.00,0.00,USD
+6040,Marketing & Advertising,OPEX,28600.00,0.00,USD
+6050,Travel & Entertainment,OPEX,9800.00,0.00,USD
+6060,Depreciation Expense,OPEX,14200.00,0.00,USD
+6070,Legal & Professional Fees,OPEX,22000.00,0.00,USD
+7000,Interest Income,OTHER_INCOME,0.00,4200.00,USD
+8000,Interest Expense,OTHER_EXPENSE,6800.00,0.00,USD
