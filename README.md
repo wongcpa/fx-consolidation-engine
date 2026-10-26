@@ -9,7 +9,7 @@ Built to reflect month-end close consolidation at a multi-entity SaaS organizati
 ---
 
 ## Live Demo
-Open `src/index.html` in any browser — no server, no install, no data upload. Drop fixture CSVs from `fixtures/` to see a full consolidation instantly.
+**[Try it live →](https://www.wong.cpa/fx-consolidation-engine/src/)**. Or open `src/index.html` locally in any browser — no server, no install, no data upload. Drop fixture CSVs from `tests/fixtures/` to see a full consolidation instantly.
 
 ---
 
@@ -35,12 +35,12 @@ fx-consolidation-engine/
 │   ├── index.html            # Browser web app (drag & drop, no install)
 │   └── consolidation.py      # Python CLI with file input prompts
 ├── tests/
-│   └── test_consolidation.py # pytest suite — FX, elimination, integration
-├── fixtures/
-│   ├── entity_a_usd.csv
-│   ├── entity_b_cad.csv
-│   ├── entity_c_gbp.csv
-│   └── intercompany_eliminations.csv
+│   ├── test_consolidation.py # pytest suite — FX, elimination, integration
+│   └── fixtures/
+│       ├── entity_a_usd.csv
+│       ├── entity_b_cad.csv
+│       ├── entity_c_gbp.csv
+│       └── intercompany_eliminations.csv
 ├── requirements.txt
 ├── .gitignore
 └── LICENSE
@@ -57,7 +57,7 @@ fx-consolidation-engine/
 git clone https://github.com/wongcpa/fx-consolidation-engine.git
 cd fx-consolidation-engine
 python src/consolidation.py
-# Prompts for each file — enter paths from fixtures/
+# Prompts for each file — enter paths from tests/fixtures/
 ```
 
 **Tests:**
