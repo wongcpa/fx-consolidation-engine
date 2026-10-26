@@ -469,4 +469,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Report symbols (✔, →) must print even when output is redirected on Windows.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     main()
