@@ -117,6 +117,11 @@ tr:hover td{background:var(--bg)}
 .code-cell{color:var(--teal);font-size:11px;font-weight:500}
 
 /* ── FX NOTE ── */
+.checks{display:flex;flex-direction:column;gap:6px;margin-bottom:2rem}
+.check{font-size:12px;padding:8px 14px;border-radius:3px;border:1px solid}
+.check.ok{background:#f0fdf4;border-color:#bbf7d0;color:var(--green)}
+.check.bad{background:#fef2f2;border-color:#fecaca;color:var(--red)}
+.check.info{background:var(--paper);border-color:var(--rule);color:var(--muted)}
 .fx-note{background:var(--paper);border-left:3px solid var(--gold);padding:12px 16px;font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:2rem;border-radius:0 4px 4px 0}
 .fx-note strong{color:var(--ink)}
 
@@ -186,12 +191,14 @@ header{background:#ffffff !important;border-bottom:1px solid #d1cdc4 !important}
     <div class="fx-pair">CAD/USD</div>
     <div><div class="fx-type">Avg (P&L)</div><input class="fx-input" id="cad-avg" value="0.7400"></div>
     <div><div class="fx-type">Close (B/S)</div><input class="fx-input" id="cad-close" value="0.7350"></div>
+    <div><div class="fx-type">Hist (Equity)</div><input class="fx-input" id="cad-hist" value="0.7800"></div>
   </div>
   <div style="width:1px;background:var(--rule);height:28px;margin:0 4px"></div>
   <div class="fx-group">
     <div class="fx-pair">GBP/USD</div>
     <div><div class="fx-type">Avg (P&L)</div><input class="fx-input" id="gbp-avg" value="1.2700"></div>
     <div><div class="fx-type">Close (B/S)</div><input class="fx-input" id="gbp-close" value="1.2650"></div>
+    <div><div class="fx-type">Hist (Equity)</div><input class="fx-input" id="gbp-hist" value="1.3000"></div>
   </div>
 </div>
 
@@ -263,21 +270,23 @@ header{background:#ffffff !important;border-bottom:1px solid #d1cdc4 !important}
   </div>
 
   <div class="metrics-row">
-    <div class="metric"><div class="metric-label">Gross Revenue</div><div class="metric-value teal" id="m-rev">—</div></div>
+    <div class="metric"><div class="metric-label">Net Revenue</div><div class="metric-value teal" id="m-rev">—</div></div>
     <div class="metric"><div class="metric-label">Gross Profit</div><div class="metric-value green" id="m-gp">—</div></div>
-    <div class="metric"><div class="metric-label">Operating Income</div><div class="metric-value" id="m-ebit">—</div></div>
+    <div class="metric"><div class="metric-label">Net Income</div><div class="metric-value" id="m-ebit">—</div></div>
     <div class="metric"><div class="metric-label">IC Entries Eliminated</div><div class="metric-value gold" id="m-elim">—</div></div>
   </div>
+
+  <div class="checks" id="checks"></div>
 
   <div class="statements-grid">
     <!-- P&L -->
     <div class="statement">
-      <div class="statement-head">Income Statement <span class="sub">USD Thousands</span></div>
+      <div class="statement-head">Income Statement <span class="sub">USD — Average Rate</span></div>
       <div id="pl-body"></div>
     </div>
     <!-- B/S -->
     <div class="statement">
-      <div class="statement-head">Balance Sheet <span class="sub">USD — Closing Rate</span></div>
+      <div class="statement-head">Balance Sheet <span class="sub">USD — Closing / Historical</span></div>
       <div id="bs-body"></div>
     </div>
   </div>
@@ -297,11 +306,12 @@ header{background:#ffffff !important;border-bottom:1px solid #d1cdc4 !important}
   </div>
 
   <div class="fx-note">
-    <strong>FX Translation Applied (IAS 21):</strong>
-    P&L accounts translated at period-average rate. Balance Sheet accounts translated at period-closing rate.
-    CAD/USD avg: <strong id="note-cad-avg"></strong> · close: <strong id="note-cad-close"></strong> &nbsp;|&nbsp;
-    GBP/USD avg: <strong id="note-gbp-avg"></strong> · close: <strong id="note-gbp-close"></strong>.
-    Intercompany balances eliminated per uploaded eliminations file.
+    <strong>FX Translation Applied (IAS 21 / ASC 830, current rate method):</strong>
+    assets and liabilities at the closing rate, income and expenses at the average rate, equity at historical rates.
+    Each entity's translation difference is booked to the Cumulative Translation Adjustment in equity (OCI).
+    CAD/USD avg <strong id="note-cad-avg"></strong> · close <strong id="note-cad-close"></strong> · hist <strong id="note-cad-hist"></strong> &nbsp;|&nbsp;
+    GBP/USD avg <strong id="note-gbp-avg"></strong> · close <strong id="note-gbp-close"></strong> · hist <strong id="note-gbp-hist"></strong>.
+    Eliminations posted as balanced USD journal entries.
   </div>
 
 </div>
@@ -375,50 +385,59 @@ function parseCSV(text){
 
 function getRate(ccy,type){
   if(ccy==='USD')return 1;
-  if(ccy==='CAD')return type==='avg'?+document.getElementById('cad-avg').value:+document.getElementById('cad-close').value;
-  if(ccy==='GBP')return type==='avg'?+document.getElementById('gbp-avg').value:+document.getElementById('gbp-close').value;
-  return 1;
+  const id={avg:'avg',close:'close',hist:'hist'}[type];
+  if(ccy==='CAD'||ccy==='GBP')return +document.getElementById(ccy.toLowerCase()+'-'+id).value;
+  throw new Error(`No FX rate defined for ${ccy} → USD`);
 }
 
 const PL_TYPES=new Set(['REVENUE','COGS','OPEX','OTHER_INCOME','OTHER_EXPENSE']);
+const CTA_CODE='3900', CTA_NAME='Cumulative Translation Adjustment (OCI)';
+const round2=n=>Math.round(n*100)/100;
 
-function translateRow(row){
-  const ccy=row.currency||row.ccy||'USD';
-  const isPL=PL_TYPES.has(row.account_type||row.type||'');
-  const rateType=isPL?'avg':'close';
-  const rate=getRate(ccy,rateType);
-  return{
-    code:row.account_code||row.code,
-    name:row.account_name||row.name,
-    type:row.account_type||row.type,
-    usd_debit:parseFloat(row.debit||0)*rate,
-    usd_credit:parseFloat(row.credit||0)*rate,
-  };
+// IAS 21 current rate method
+function rateTypeFor(type){return PL_TYPES.has(type)?'avg':type==='EQUITY'?'hist':'close'}
+
+function translateEntity(tb,label){
+  const ld=tb.reduce((s,r)=>s+parseFloat(r.debit||0),0), lc=tb.reduce((s,r)=>s+parseFloat(r.credit||0),0);
+  if(Math.abs(ld-lc)>0.005)throw new Error(`${label} trial balance does not balance: debits ${ld.toFixed(2)} vs credits ${lc.toFixed(2)}.`);
+  const rows=tb.map(row=>{
+    const type=row.account_type, rate=getRate(row.currency||'USD',rateTypeFor(type));
+    return{code:row.account_code,name:row.account_name,type,
+      dr:round2(parseFloat(row.debit||0)*rate),cr:round2(parseFloat(row.credit||0)*rate)};
+  });
+  // Mixed rates leave the translated TB out of balance; the difference is the entity's CTA.
+  const diff=round2(rows.reduce((s,r)=>s+r.dr-r.cr,0));
+  if(diff)rows.push({code:CTA_CODE,name:CTA_NAME,type:'EQUITY',dr:Math.max(-diff,0),cr:Math.max(diff,0)});
+  return rows;
 }
 
 function consolidate(){
-  const ledger={};
+  try{renderResults(buildLedger())}
+  catch(err){alert(err.message)}
+}
 
-  // Process entity trial balances
-  [data.a,data.b,data.c].forEach(tb=>{
-    tb.forEach(row=>{
-      const t=translateRow(row);
+function buildLedger(){
+  const ledger={};
+  [['Entity A',data.a],['Entity B',data.b],['Entity C',data.c]].forEach(([label,tb])=>{
+    translateEntity(tb,label).forEach(t=>{
       if(!ledger[t.code])ledger[t.code]={code:t.code,name:t.name,type:t.type,dr:0,cr:0};
-      ledger[t.code].dr+=t.usd_debit;
-      ledger[t.code].cr+=t.usd_credit;
+      else if(ledger[t.code].type!==t.type)
+        throw new Error(`Account ${t.code} is ${ledger[t.code].type} in one entity and ${t.type} in ${label}. Map all entities to a common group chart of accounts first.`);
+      ledger[t.code].dr+=t.dr;
+      ledger[t.code].cr+=t.cr;
     });
   });
 
-  // Apply eliminations
-  data.e.forEach(row=>{
-    const code=(row.account_code||'').trim();
-    if(!code)return;
-    if(!ledger[code])ledger[code]={code,name:(row.account_name||'').trim(),type:(row.account_type||'').trim(),dr:0,cr:0};
-    ledger[code].dr-=parseFloat(row.elim_debit_usd||0);
-    ledger[code].cr-=parseFloat(row.elim_credit_usd||0);
+  const elims=data.e.filter(r=>(r.account_code||'').trim());
+  const ed=elims.reduce((s,r)=>s+parseFloat(r.elim_debit_usd||0),0), ec=elims.reduce((s,r)=>s+parseFloat(r.elim_credit_usd||0),0);
+  if(Math.abs(ed-ec)>0.005)throw new Error(`Eliminations do not balance: debits ${ed.toFixed(2)} vs credits ${ec.toFixed(2)}.`);
+  elims.forEach(row=>{
+    const code=row.account_code.trim();
+    if(!ledger[code])throw new Error(`Elimination "${row.description}" references account ${code}, which is not in any trial balance.`);
+    ledger[code].dr+=parseFloat(row.elim_debit_usd||0);
+    ledger[code].cr+=parseFloat(row.elim_credit_usd||0);
   });
-
-  renderResults(ledger);
+  return ledger;
 }
 
 function netAmt(row){
@@ -426,15 +445,31 @@ function netAmt(row){
   return creditNorm.has(row.type)?row.cr-row.dr:row.dr-row.cr;
 }
 
-function fmtK(n){
-  const s=Math.abs(n/1000).toFixed(1);
-  return(n<0?'(':'')+'$'+s+'K'+(n<0?')':'');
+function summarize(ledger){
+  const t={};
+  Object.values(ledger).forEach(r=>{t[r.type]=(t[r.type]||0)+netAmt(r)});
+  const g=k=>t[k]||0;
+  const gp=g('REVENUE')-g('COGS'), ebit=gp-g('OPEX'), ni=ebit+g('OTHER_INCOME')-g('OTHER_EXPENSE');
+  return{revenue:g('REVENUE'),gp,ebit,ni,assets:g('ASSET'),liab:g('LIABILITY'),equity:g('EQUITY'),
+    cta:ledger[CTA_CODE]?netAmt(ledger[CTA_CODE]):0, diff:round2(g('ASSET')-g('LIABILITY')-g('EQUITY')-ni)};
 }
+
 function fmtFull(n){
+  n=round2(n);
   return(n<0?'($':'$')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})+(n<0?')':'');
 }
 
 let lastLedger=null;
+
+function stmtRows(body,rows){
+  rows.sort((a,b)=>a.code.localeCompare(b.code)).forEach(r=>{
+    const n=netAmt(r);
+    body.innerHTML+=`<div class="stmt-row"><div class="stmt-code">${r.code}</div><div class="stmt-name">${r.name}</div><div class="stmt-amount ${n>=0?'pos':'neg'}">${fmtFull(n)}</div></div>`;
+  });
+}
+function stmtTotal(body,label,amt,highlight){
+  body.innerHTML+=`<div class="stmt-total${highlight?' highlight':''}"><div class="label">${label}</div><div class="amount">${fmtFull(amt)}</div></div>`;
+}
 
 function renderResults(ledger){
   lastLedger=ledger;
@@ -442,97 +477,78 @@ function renderResults(ledger){
   document.getElementById('results').style.display='block';
   document.getElementById('export-btn').style.display='inline-flex';
 
-  const rows=Object.values(ledger);
-  const pl=rows.filter(r=>PL_TYPES.has(r.type));
-  const bs=rows.filter(r=>!PL_TYPES.has(r.type));
+  const rows=Object.values(ledger), s=summarize(ledger);
+  const of=type=>rows.filter(r=>r.type===type);
+  const elims=data.e.filter(r=>r.account_code);
 
-  // Metrics
-  const rev=pl.filter(r=>r.type==='REVENUE').reduce((s,r)=>s+netAmt(r),0);
-  const cogs=pl.filter(r=>r.type==='COGS').reduce((s,r)=>s+netAmt(r),0);
-  const opex=pl.filter(r=>r.type==='OPEX').reduce((s,r)=>s+netAmt(r),0);
-  const gp=rev-cogs;
-  const ebit=gp-opex;
-  const elimCount=data.e.filter(r=>r.account_code).length;
-
-  document.getElementById('m-rev').textContent=fmtFull(rev);
-  document.getElementById('m-gp').textContent=fmtFull(gp);
-  document.getElementById('m-ebit').textContent=fmtFull(ebit);
-  document.getElementById('m-ebit').className='metric-value '+(ebit>=0?'green':'');
-  document.getElementById('m-elim').textContent=elimCount;
+  document.getElementById('m-rev').textContent=fmtFull(s.revenue);
+  document.getElementById('m-gp').textContent=fmtFull(s.gp);
+  document.getElementById('m-ebit').textContent=fmtFull(s.ni);
+  document.getElementById('m-ebit').className='metric-value '+(s.ni>=0?'green':'');
+  document.getElementById('m-elim').textContent=elims.length;
 
   // P&L
-  const plBody=document.getElementById('pl-body');
-  plBody.innerHTML='';
-  let totalRevAmt=0,totalCOGS=0,totalOPEX=0;
-
-  [['REVENUE','Revenue'],['COGS','Cost of Goods Sold'],['OPEX','Operating Expenses'],['OTHER_INCOME','Other Income'],['OTHER_EXPENSE','Other Expense']].forEach(([type,label])=>{
-    const sRows=pl.filter(r=>r.type===type).sort((a,b)=>a.code.localeCompare(b.code));
-    if(!sRows.length)return;
-    plBody.innerHTML+=`<div class="stmt-section-label">${label}</div>`;
-    sRows.forEach(r=>{
-      const n=netAmt(r);
-      const cls=n>=0?'pos':'neg';
-      plBody.innerHTML+=`<div class="stmt-row"><div class="stmt-code">${r.code}</div><div class="stmt-name">${r.name}</div><div class="stmt-amount ${cls}">${fmtFull(n)}</div></div>`;
-      if(type==='REVENUE')totalRevAmt+=n;
-      else if(type==='COGS')totalCOGS+=n;
-      else if(type==='OPEX')totalOPEX+=n;
-    });
-  });
-
-  const gpAmt=totalRevAmt-totalCOGS;
-  const ebitAmt=gpAmt-totalOPEX;
-  plBody.innerHTML+=`<div class="stmt-total"><div class="label">Gross Profit</div><div class="amount">${fmtFull(gpAmt)}</div></div>`;
-  plBody.innerHTML+=`<div class="stmt-total highlight"><div class="label">Operating Income (EBIT)</div><div class="amount">${fmtFull(ebitAmt)}</div></div>`;
+  const pl=document.getElementById('pl-body');
+  pl.innerHTML='';
+  const plSection=(type,label)=>{if(of(type).length){pl.innerHTML+=`<div class="stmt-section-label">${label}</div>`;stmtRows(pl,of(type))}};
+  plSection('REVENUE','Revenue');
+  plSection('COGS','Cost of Goods Sold');
+  stmtTotal(pl,'Gross Profit',s.gp);
+  plSection('OPEX','Operating Expenses');
+  stmtTotal(pl,'Operating Income (EBIT)',s.ebit);
+  plSection('OTHER_INCOME','Other Income');
+  plSection('OTHER_EXPENSE','Other Expense');
+  stmtTotal(pl,'Net Income',s.ni,true);
 
   // B/S
-  const bsBody=document.getElementById('bs-body');
-  bsBody.innerHTML='';
-  let totalAssets=0,totalLiab=0,totalEquity=0;
+  const bs=document.getElementById('bs-body');
+  bs.innerHTML='';
+  bs.innerHTML+=`<div class="stmt-section-label">Assets</div>`; stmtRows(bs,of('ASSET')); stmtTotal(bs,'Total Assets',s.assets);
+  bs.innerHTML+=`<div class="stmt-section-label">Liabilities</div>`; stmtRows(bs,of('LIABILITY')); stmtTotal(bs,'Total Liabilities',s.liab);
+  bs.innerHTML+=`<div class="stmt-section-label">Equity</div>`; stmtRows(bs,of('EQUITY'));
+  bs.innerHTML+=`<div class="stmt-row"><div class="stmt-code"></div><div class="stmt-name">Net Income — Current Period</div><div class="stmt-amount ${s.ni>=0?'pos':'neg'}">${fmtFull(s.ni)}</div></div>`;
+  stmtTotal(bs,'Total Equity',s.equity+s.ni);
+  stmtTotal(bs,'Total Liabilities & Equity',s.liab+s.equity+s.ni,true);
 
-  [['ASSET','Assets'],['LIABILITY','Liabilities'],['EQUITY','Equity']].forEach(([type,label])=>{
-    const sRows=bs.filter(r=>r.type===type).sort((a,b)=>a.code.localeCompare(b.code));
-    if(!sRows.length)return;
-    bsBody.innerHTML+=`<div class="stmt-section-label">${label}</div>`;
-    let sTotal=0;
-    sRows.forEach(r=>{
-      const n=netAmt(r);
-      const cls=n>=0?'pos':'neg';
-      bsBody.innerHTML+=`<div class="stmt-row"><div class="stmt-code">${r.code}</div><div class="stmt-name">${r.name}</div><div class="stmt-amount ${cls}">${fmtFull(n)}</div></div>`;
-      sTotal+=n;
-      if(type==='ASSET')totalAssets+=n;
-      else if(type==='LIABILITY')totalLiab+=n;
-      else if(type==='EQUITY')totalEquity+=n;
-    });
-    bsBody.innerHTML+=`<div class="stmt-total"><div class="label">Total ${label}</div><div class="amount">${fmtFull(sTotal)}</div></div>`;
-  });
+  // Checks
+  const checks=[];
+  checks.push(Math.abs(s.diff)<0.01
+    ?['ok','✔ Balance sheet balances: Assets = Liabilities + Equity']
+    :['bad',`✘ Balance sheet out of balance by ${fmtFull(s.diff)}`]);
+  const residual=[...new Set(elims.map(r=>r.account_code.trim()))]
+    .filter(c=>ledger[c]&&Math.abs(netAmt(ledger[c]))>0.005);
+  checks.push(residual.length
+    ?['bad','⚠ Intercompany residual after elimination: '+residual.map(c=>`${c} ${ledger[c].name} ${fmtFull(netAmt(ledger[c]))}`).join('; ')+'. Check the FX rates and elimination amounts.']
+    :['ok','✔ Intercompany balances fully eliminated']);
+  checks.push(['info',`Cumulative Translation Adjustment (OCI) for the period: ${fmtFull(s.cta)}`]);
+  document.getElementById('checks').innerHTML=checks.map(([c,txt])=>`<div class="check ${c}">${txt}</div>`).join('');
 
   // Eliminations table
-  document.getElementById('elim-count').textContent=data.e.length+' entries';
+  document.getElementById('elim-count').textContent=elims.length+' entries';
   const elimBody=document.getElementById('elim-body');
   elimBody.innerHTML='';
-  data.e.forEach(row=>{
+  elims.forEach(row=>{
     elimBody.innerHTML+=`<tr>
       <td>${row.description||''}</td>
       <td class="code-cell">${row.account_code||''}</td>
       <td>${row.account_name||''}</td>
       <td style="color:var(--muted)">${row.entity||''}</td>
-      <td style="text-align:right">${row.elim_debit_usd?fmtFull(+row.elim_debit_usd):''}</td>
-      <td style="text-align:right">${row.elim_credit_usd?fmtFull(+row.elim_credit_usd):''}</td>
+      <td style="text-align:right">${+row.elim_debit_usd?fmtFull(+row.elim_debit_usd):''}</td>
+      <td style="text-align:right">${+row.elim_credit_usd?fmtFull(+row.elim_credit_usd):''}</td>
     </tr>`;
   });
 
   // FX notes
-  document.getElementById('note-cad-avg').textContent=document.getElementById('cad-avg').value;
-  document.getElementById('note-cad-close').textContent=document.getElementById('cad-close').value;
-  document.getElementById('note-gbp-avg').textContent=document.getElementById('gbp-avg').value;
-  document.getElementById('note-gbp-close').textContent=document.getElementById('gbp-close').value;
+  ['cad','gbp'].forEach(c=>['avg','close','hist'].forEach(k=>{
+    document.getElementById(`note-${c}-${k}`).textContent=document.getElementById(`${c}-${k}`).value;
+  }));
 }
 
 function exportCSV(){
   if(!lastLedger)return;
   let csv='account_code,account_name,account_type,total_debit_usd,total_credit_usd,net_usd\n';
   Object.values(lastLedger).sort((a,b)=>a.code.localeCompare(b.code)).forEach(r=>{
-    csv+=`${r.code},"${r.name}",${r.type},${r.dr.toFixed(2)},${r.cr.toFixed(2)},${(r.cr-r.dr).toFixed(2)}\n`;
+    csv+=`${r.code},"${r.name}",${r.type},${r.dr.toFixed(2)},${r.cr.toFixed(2)},${netAmt(r).toFixed(2)}\n`;
   });
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));

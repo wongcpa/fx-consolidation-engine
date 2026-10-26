@@ -1,13 +1,13 @@
 account_code,account_name,account_type,debit,credit,currency
-1000,Cash - Operating,ASSET,312500.00,0.00,USD
+1000,Cash - Operating,ASSET,583600.00,0.00,USD
 1001,Cash - Payroll,ASSET,48000.00,0.00,USD
 1100,Accounts Receivable,ASSET,128400.00,0.00,USD
 1200,Intercompany Receivable - Entity B,ASSET,54200.00,0.00,USD
 1210,Prepaid Expenses,ASSET,18600.00,0.00,USD
-1300,Fixed Assets - Equipment,ASSET,245000.00,0.00,USD
-1310,Accum Depr - Equipment,ASSET,0.00,82000.00,USD
+1300,Property Plant & Equipment,ASSET,245000.00,0.00,USD
+1310,Accumulated Depreciation,ASSET,0.00,82000.00,USD
 1400,Content Assets,ASSET,180000.00,0.00,USD
-1410,Accum Amort - Content,ASSET,0.00,42000.00,USD
+1410,Accumulated Amortization - Content,ASSET,0.00,42000.00,USD
 2000,Accounts Payable,LIABILITY,0.00,44800.00,USD
 2010,Accrued Liabilities,LIABILITY,0.00,22400.00,USD
 2020,Deferred Revenue,LIABILITY,0.00,38500.00,USD
@@ -26,7 +26,7 @@ account_code,account_name,account_type,debit,credit,currency
 5020,Distribution Costs,COGS,31200.00,0.00,USD
 6000,Salaries & Wages,OPEX,96400.00,0.00,USD
 6010,Benefits & Payroll Taxes,OPEX,18200.00,0.00,USD
-6020,Rent Expense,OPEX,22800.00,0.00,USD
+6020,Rent & Occupancy,OPEX,22800.00,0.00,USD
 6030,Software & Subscriptions,OPEX,16400.00,0.00,USD
 6040,Marketing & Advertising,OPEX,28600.00,0.00,USD
 6050,Travel & Entertainment,OPEX,9800.00,0.00,USD
